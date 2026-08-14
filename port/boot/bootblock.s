@@ -17,7 +17,7 @@
 ;     `jmp ($0048)` (the driver returns with RTS, so we must JSR, not JMP).
 ;
 ; We read blocks 2..(nblocks+1) into a bank-0 staging buffer ($0C00 + n*512),
-; then MVN them to bank $02. Block 1 is skipped (the firmware's IWM driver
+; then copy them to bank $02. Block 1 is skipped (the firmware's IWM driver
 ; fails to read block 1 in GSSquared; sys6's working boot also starts at 2).
 
     cpu 65816
@@ -71,12 +71,10 @@ read_loop:
 done_load:
     ; native mode, M/X = 16.
     ; Copy nblocks*512 bytes from bank 0 $0C00 to bank $02 $020000 using
-    ; absolute LONG indexed addressing. NOTE: we do NOT use MVN -- GSSquared's
-    ; move_memory() reads the DEST bank from the first operand byte and the
-    ; SOURCE from the second (swap vs the 65816 spec where the first byte is
-    ; the source bank), so `mvn #$02,#$00` copies bank $02 -> bank $00 there.
-    ; The long-addressing loop is correct on both the emulator and real
-    ; hardware.
+    ; absolute LONG indexed addressing. (MVN could do this too: vasm syntax
+    ; `mvn #$02,#$00` = src bank $02 -> dest bank $00, and both GSSquared and
+    ; real hardware encode `54 <dest> <src>` identically. The long-addressing
+    ; loop is used instead and is correct on both emulator and hardware.)
     clc
     xce
     rep #$30
