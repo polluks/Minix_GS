@@ -5,10 +5,10 @@ LD   := /Users/sah/6502/vlink-src/vlink/vlink
 
 CFLAGS  := -iigs -const-in-data -unsigned-char -mask-opt -O=0
 AFLAGS  := -816 -Fvobj -vobj3 -quiet -nowarn=62 -opt-branch -ldots
-LDFLAGS := -b rawbin -T link.ld -e _start
 
 BUILD := build
-OBJS  := $(BUILD)/startup.o $(BUILD)/main.o $(BUILD)/console.o
+LDFLAGS := -b rawbin -T link.ld -e _start -vicelabels $(BUILD)/kernel.lbl
+OBJS  := $(BUILD)/startup.o $(BUILD)/main.o $(BUILD)/console.o $(BUILD)/int.o $(BUILD)/intentry.o
 
 all: $(BUILD)/minixgs.po
 

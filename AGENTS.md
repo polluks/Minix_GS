@@ -36,7 +36,8 @@ The vbcc65816 *r2 distro* ships Linux/Win binaries only (cannot run on arm64 mac
 ## Memory Model / Architecture
 
 - **No MMU**. Per-process 64KB bank in expansion RAM; kernel copies via DB manipulation. Bank isolation = memory protection.
-- **Bank layout (plan)**: bank $02 kernel text, $03 kernel data/stack, $04+ processes/tasks. Bank 0 = main memory ($0000-$BFFF RAM; $C000-$CFFF I/O; $D000-$FFFF ROM but vector area $FFD0-$FFFF is **always RAM-shadowed** → we can install native IRQ/COP/BRK vectors there).
+- **Bank layout (plan)**: bank $02 kernel text, $03 kernel data/stack, $04+ processes/tasks. Bank 0 = main memory ($0000-$BFFF RAM; $C000-$CFFF I/O; $D000-$FFFF ROM/LC). The IIgs shadow register ($C035) controls ROM shadowing of $C000-$FFFF; LC RAM at $D000-$FFFF is read when RAMRD ($C080) is set. **Vectors ($FFE4-$FFFF) are NOT "always RAM"** — in GSSquared they come from ROM unless RAMRD is on AND the emulator's `vp_read` honors RAMRD (see interrupt bring-up note below).
+- **Interrupt bring-up (VERIFIED in GSSquared, kernel change + 2 emulator fixes)**: timer_init copies trampolines to $0900/$0908, writes vectors $FFEE=0900/$FFE6=0908 **BEFORE** `$C080` (LC RAMRD, write-enable off), then `$C041=0x08` (INTEN bit3=VBL). VBL scanner event → f_vblint_asserted → MegaII IRQ → CPU push P/PC/PB → vector $FFEE (LC RAM) → $00:0900 → `jml >$0203D3` prolog (`rep #$30; pha; phx; phy; phd; phb`) → jsl >$0202E7 (`sta >$C047; inc $049E`) → epilog (`plb pld ply plx pla`) → `rti`. jiffies@$02049E ticks 60 Hz. **Emulator bugs fixed in the GSSquared clone (NOT upstream, NOT in this repo)**: (1) `MMU_IIgs::vp_read` ignored RAMRD and always returned ROM for bank-0 vector fetches → kernel got ROM's $C074 vector instead of $0900; (2) `display_write_c041` never set `f_vbl_enable`, so INTEN bit3 never reached the MegaII IRQ logic. On real hardware only the kernel change is needed.
 - **I/O and special pages exist ONLY in bank 0**: in expansion-RAM banks $02+, $C000-$CFFF is plain RAM, not I/O; text pages $0400/$0500 and vectors $FFD0-$FFFF also live in bank 0. Kernel in bank $02 must reach them with `__far` 24-bit pointers.
 - **Hardware stack is ALWAYS in bank 0** (65816 native, 16-bit SP) — all process/kernel stacks must live in bank 0 ($8000-$BFFF region). DP addressing is DBR-relative (DP:offset within current DBR bank).
 - **80-col text layout (VERIFIED, incl. GSSquared `src/display/text_page_layout.hpp`)**: classic Apple II nonlinear row offsets — row r base = `$0400 + ((r&7)*0x80) + ((r>>3)*0x28)` (row offsets 0x000,0x080,...,0x3D0). 80-col interleaves per char pair at offset x: **even column (2x) = AUX `$01:0400+base+x`**, **odd column (2x+1) = MAIN `$00:0400+base+x`**. Aux = bank $01 (+0x10000 in GSSquared). Page 2 = $0800. Writing bank1 $0400 in GSSquared lands in the aux text buffer the scanner reads (calc_aux_write passes bank-1 addresses through).
@@ -65,7 +66,8 @@ The vbcc65816 *r2 distro* ships Linux/Win binaries only (cannot run on arm64 mac
 - [x] Project skeleton under `port/` (boot/bootblock.s, tools/mkdisk.py, tools/gs2* debug harness, README credits)
 - [~] Boot block + 800K disk image builder — reads work for sys6 (C50A, ~8 s/read) but our C50A call hangs at the IWM sync poll; block-1-vs-2 hypothesis untested
 - [x] IIgs bare-metal bring-up: console works — **M1 banner displays in GSSquared 80-col mode** (kernel at $020100 → kmain → console_init/puts/putchar; blank screen was the `-O=2` arg bug, fixed by `-O=0`)
-- [ ] VIA2 timer, ADB, interrupt entry
+- [ ] VIA2 timer, ADB
+- [x] Interrupt entry: VBL IRQ + 60 Hz jiffies ticker working in GSSquared (kernel $C080/$C041 + LC vectors; emulator needed the 2 fixes above — verify on real hardware)
 - [ ] Microkernel scheduler + IPC (Minix proc.c/mpx88.s port)
 - [ ] MM, FS (SmartPort block driver), userland
 
