@@ -1,4 +1,4 @@
-; Minix-GS kernel startup (bare-metal, bank $02).
+; Minix GS kernel startup (bare-metal, bank $02).
 ;
 ; Entry contract (see AGENTS.md): native mode, SEI, DB=$02, M/X=16,
 ; DP=$0000, SP=$BFFE (bank-0 stack $8000-$BFFF). Reached via JML >$020100

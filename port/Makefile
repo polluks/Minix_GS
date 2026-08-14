@@ -8,7 +8,9 @@ AFLAGS  := -816 -Fvobj -vobj3 -quiet -nowarn=62 -opt-branch -ldots
 
 BUILD := build
 LDFLAGS := -b rawbin -T link.ld -e _start -vicelabels $(BUILD)/kernel.lbl
-OBJS  := $(BUILD)/startup.o $(BUILD)/main.o $(BUILD)/console.o $(BUILD)/int.o $(BUILD)/intentry.o
+OBJS  := $(BUILD)/startup.o $(BUILD)/main.o $(BUILD)/console.o $(BUILD)/int.o \
+         $(BUILD)/intentry.o $(BUILD)/context.o $(BUILD)/proc.o \
+         $(BUILD)/clock.o $(BUILD)/tasks.o $(BUILD)/runtime.o
 
 all: $(BUILD)/minixgs.po
 

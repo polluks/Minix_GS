@@ -1,4 +1,4 @@
-; Minix-GS boot block (TEST: register-based $C50A path, sys6-style loop).
+; Minix GS boot block (TEST: register-based $C50A path, sys6-style loop).
 ;
 ; The IIgs firmware (ROM 01) loads block 0 to $0800 (bank 0) and runs it in
 ; EMULATION mode (E=1) from $0801 after checking byte 0 == $01 (ProDOS boot
