@@ -21,6 +21,7 @@ The vbcc65816 *r2 distro* ships Linux/Win binaries only (cannot run on arm64 mac
 ## VERIFIED Compiler/Toolchain Facts (do not re-derive)
 
 - **Call model**: default code model is **far** — all calls are `jsl >func` / returns `rtl` (24-bit addresses). This works even within a single bank. The `-sc` flag is BROKEN for calls (emits `rts` in callees but `jsl >target` in callers → stack corruption). **Never use `-sc`.**
+- **Optimization -O=0 ONLY (CRITICAL, verified end-to-end)**: vbcc 65816 backend V0.2's stack-arg convention at `-O>=2` is BROKEN. At `-O=0` args are passed in registers (A + X for the bank byte of far/near pointers; last arg pushed via `pea`), and the callee spills them to *its own* frame (`sta 1,s` / `sta 3,s`). At `-O>=2` the caller additionally pre-stores the register-arg into *its own* frame slot, but the callee reads *its* post-prologue `$01,s` — off by `3 (return) + callee frame` bytes → args arrive as garbage (e.g. `console_puts` read stale `0x0416` instead of the string pointer, writing junk `0x00` to the text pages → blank screen). `real_offset()` never accounts for the return address + saved regs for params (only the `off<0` branch does, but params get positive offsets). **Use `-O=0` for all kernel C code** until the backend is fixed.
 - **Data model**: near 16-bit pointers, resolved via DB (data bank). `zpage` r0-r31 + btmp0-3 are scratch regs; the compiler emits `zpage btmpN` as *imports* — actual storage must be provided by our startup (reserve 2 each; r0-r31=0x00-0x3E, btmp0-3=0x40-0x46 in zpage).
 - **Sections emitted**: `DONTMERGE_text.far.<name>.<n>` (acrx), `DONTMERGE_data.near.<name>.<n>` (adrw), `DONTMERGE_bss.near.<name>.<n>` (aurw), `DONTMERGE_rodata...`, `zpage` (adrwz).
 - **Sections/attributes**: vlink script pattern syntax is `filepat(sectionpat)` e.g. `*(DONTMERGE_text*)`. Section names include a numeric prefix in vlink's errors but the pattern matches the base name.
@@ -63,7 +64,8 @@ The vbcc65816 *r2 distro* ships Linux/Win binaries only (cannot run on arm64 mac
 - [x] 80-col text layout confirmed (row map + aux/main interleave)
 - [x] Project skeleton under `port/` (boot/bootblock.s, tools/mkdisk.py, tools/gs2* debug harness, README credits)
 - [~] Boot block + 800K disk image builder — reads work for sys6 (C50A, ~8 s/read) but our C50A call hangs at the IWM sync poll; block-1-vs-2 hypothesis untested
-- [ ] IIgs bare-metal bring-up (console, VIA2 timer, ADB, interrupt entry)
+- [x] IIgs bare-metal bring-up: console works — **M1 banner displays in GSSquared 80-col mode** (kernel at $020100 → kmain → console_init/puts/putchar; blank screen was the `-O=2` arg bug, fixed by `-O=0`)
+- [ ] VIA2 timer, ADB, interrupt entry
 - [ ] Microkernel scheduler + IPC (Minix proc.c/mpx88.s port)
 - [ ] MM, FS (SmartPort block driver), userland
 

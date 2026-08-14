@@ -3,7 +3,7 @@ CC   := $(VBCC)/bin/vbcc65816
 AS   := /Users/sah/6502/vasm-2.0f/vasm/vasm6502_oldstyle
 LD   := /Users/sah/6502/vlink-src/vlink/vlink
 
-CFLAGS  := -iigs -const-in-data -unsigned-char -mask-opt -O=2
+CFLAGS  := -iigs -const-in-data -unsigned-char -mask-opt -O=0
 AFLAGS  := -816 -Fvobj -vobj3 -quiet -nowarn=62 -opt-branch -ldots
 LDFLAGS := -b rawbin -T link.ld -e _start
 
