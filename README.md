@@ -27,30 +27,45 @@ library target.
 | 20-bit address space   | 24-bit address space (banks)|
 | 16-bit registers       | 16-bit registers (native)   |
 | No MMU                 | No MMU                      |
-| INT 0x21-ish syscalls  | COP / custom trap           |
-| 8259 PIC               | 6522 VIAs + IWM/Mega II IRQ |
-| 8253 timer             | VIA2 timer 1                |
-| 6845 MDA/CGA text      | VGC 80-col text mode        |
+| INT 0x21-ish syscalls  | native BRK trap ($FFE6)   |
+| 8259 PIC               | Mega II IRQ controller    |
+| 8253 timer             | VBL interrupt (~60 Hz)    |
+| 6845 MDA/CGA text      | VGC 80-col text mode      |
 | PC keyboard + BIOS     | ADB keyboard                |
 | floppy + ST-506/IDE    | SmartPort (3.5" floppy, RAM, ProDOS devices) |
 
 ## Status
 
-Work in progress. Nothing boots yet — this is being brought up bottom-up.
+Work in progress, being brought up bottom-up. The kernel now boots bare-metal
+in the **GSSquared** emulator: 80-column console output works, and the VBL
+interrupt drives a 60 Hz `jiffies` ticker through the native IRQ vector.
+Next up is the microkernel scheduler + IPC.
 
 - [x] vbcc 65816 toolchain built for macOS arm64 (compiler + `dtgen`)
 - [x] 65816 data model generated (`dt.h`: 16-bit `int`, 32-bit `long`, 64-bit `long long`, 16-bit near pointer)
-- [ ] vasm 65816 + vlink built for macOS
-- [ ] Toolchain smoke test (IIgs hello world)
-- [ ] Boot loader / raw block-0 bootstrap
-- [ ] Kernel bring-up: 65816 startup, vectors, context switch
-- [ ] VIA2 timer + interrupt dispatch
-- [ ] Console driver (VGC 80-column text mode)
+- [x] vasm 65816 + vlink built for macOS
+- [x] Toolchain smoke test (rawbin link at $020000, correct 24-bit bank bytes)
+- [x] Boot loader / raw block-0 bootstrap (ProDOS 8 boot block + SmartPort, 800K image)
+- [x] Kernel bring-up: 65816 startup, bank-0 kernel stack, M1 banner in 80-col text
+- [x] Interrupt entry: VBL IRQ + 60 Hz `jiffies` ticker via native vectors in LC RAM
+- [x] Console driver (80-column text mode, aux/main interleave)
+- [ ] Microkernel scheduler + IPC (`proc.c`/`mpx816.s` port)
 - [ ] ADB keyboard driver
-- [ ] SmartPort block device driver
+- [ ] SmartPort block device driver (read path works for real ProDOS; our driver still hangs at the IWM sync poll)
 - [ ] `kernel`, `mm`, `fs` processes and IPC
 - [ ] `init`, shell, basic commands
-- [ ] Bootable ProDOS/SmartPort image tested under GSplus
+- [ ] Bootable image tested under GSplus
+
+### Known quirks
+
+- **`-O=0` only.** vbcc's 65816 backend at `-O>=2` mishandles stack-arg
+  passing; all kernel C is built at `-O=0` (args passed in registers A/X + a
+  trailing `pea`), which has been verified empirically for multi-arg and
+  pointer-arg calls.
+- **Two GSSquared emulator bugs fixed locally** (kernel change only is needed
+  on real hardware): the emulator ignored the LC RAMRD softswitch when
+  fetching bank-0 vectors, and `$C041` writes never enabled VBL in its
+  interrupt logic. See AGENTS.md.
 
 ## Architecture
 
@@ -99,6 +114,29 @@ port plan:
 processes. The 65816 has a 16-bit stack pointer — each process switch swaps
 `S`/`PB`/`DB`/DP and restores its register frame from its own bank.
 
+### Bank layout (current)
+
+```
+bank $00  main RAM + I/O ($C000-$CFFF) + LC RAM ($D000-$FFFF, vectors)
+bank $01  aux text buffer (80-col odd/even interleave)
+bank $02  kernel text/data + zpage ($020000-$0200FF)
+bank $03  kernel data/stack (future)
+bank $04+ processes/tasks (future)
+```
+
+No MMU — a 64 KB bank per process is the memory protection. The hardware
+stack is always in bank 0; per-task kernel stacks live at $A000-$ABFF and
+the kernel stack at $8000-$BFFF (bank 0). Text pages ($0400/$0500), I/O
+($C000-$CFFF) and vectors ($FFE6/$FFEE) are bank-0 only, reached from
+bank-$02 kernel code with `__far` 24-bit pointers.
+
+### Boot flow
+
+The firmware loads the ProDOS 8 boot block (block 0) to $0800 and runs it in
+emulation mode. The boot block switches to native mode, reads the raw kernel
+image from the SmartPort drive into bank $02, then `jml >$020100` into
+`_start`. `_start` sets up the 16-bit native state and calls `kmain`.
+
 ## Toolchain
 
 The official vbcc 65816 distribution ships Windows and Linux binaries only.
@@ -132,6 +170,7 @@ make TARGET=65816
 ```
 Minix-GS/
 ├── README.md              # this file
+├── AGENTS.md              # working notes: toolchain, memory model, bring-up facts
 ├── old-minix-1.2/         # Minix 1.2 sources (reference; unchanged)
 │   ├── include/           # public headers
 │   └── src/
@@ -140,24 +179,45 @@ Minix-GS/
 │       ├── fs/            # file system
 │       ├── lib/           # C library
 │       └── commands/      # userland (init, sh, ls, ...)
-├── port/                  # IIGS-specific port code (planned)
-│   ├── boot/              # boot block, loader
-│   ├── kernel/            # 65816 startup/vectors, mpx816.s, klib816.s
-│   ├── drivers/           # console, keyboard, smartport, timer
-│   └── tools/             # build scripts, dtgen answers, image tooling
-└── tools/                 # cross-build makefiles
+└── port/                  # IIGS port
+    ├── boot/
+    │   └── bootblock.s    # ProDOS 8 boot block (assembles for org $0800)
+    ├── kernel/            # 65816 kernel: startup, console, int, scheduler (WIP)
+    │   ├── startup.s      # zpage storage, native-mode entry
+    │   ├── main.c         # kmain
+    │   ├── console.c      # 80-col text via far pointers
+    │   ├── int.c/intentry.s   # VBL IRQ, LC-RAM vectors, jiffies
+    │   └── ...
+    ├── tools/             # mkdisk.py + gs2* debug probes for GSSquared
+    ├── link.ld            # linker script (bank $02)
+    └── Makefile           # build
 ```
 
 ## Building & running
 
-(Not yet working — placeholder until the toolchain smoke test passes.)
+Requires the mac-built toolchain (`VBCC=/Users/sah/6502/vbcc65816-mac`, vasm,
+vlink — see AGENTS.md), then:
 
-The goal is a bootable raw image loadable by GSplus/MAME (and burnable to a
-3.5" disk / FlashRAM) that boots straight into Minix and prints the classic:
+```sh
+cd port
+make                    # builds bootblock.bin + kernel.raw, packs minixgs.po
+```
+
+`make minixgs.po` produces an 800K disk image: block 0 is the custom ProDOS
+boot block, blocks 1..N the raw kernel. Boot it in **GSSquared** (which maps
+the image into slot 5) and the kernel prints its banner in 80-column text and
+starts ticking `jiffies` at 60 Hz from the VBL interrupt.
+
+On success the machine shows the classic:
 
 ```
-MINIX 1.2 -- Copyright 1987 Prentice-Hall, Inc.
+Minix GS M1: 65816 native, bank 0 I/O reachable
+kernel in bank $02, 80-col text via far pointers
 ```
+
+Note: the two GSSquared fixes (RAMRD-respecting vector fetch, `$C041` VBL
+enable) are local to the working emulator clone — real hardware needs only
+the kernel's LC-RAM vector installation.
 
 ## Credits
 
