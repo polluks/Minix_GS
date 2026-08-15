@@ -51,10 +51,73 @@ void console_init(void)
     cur_col = 0;
 }
 
+/* Ensoniq DOC host interface, reached via the bank $E0 MegaII window (the
+ * kernel inhibits IOLC shadowing, so bank-0 $C0xx reads as RAM): Sound
+ * Control $C03C, Sound Data $C03D, Sound Address $C03E/$C03F.  Control bit 6
+ * = RAM mode, bit 5 = auto-increment, low nibble = system volume.  This is
+ * the same path the ROM boot beep uses; GSSquared emulates the DOC with SDL
+ * audio output.
+ *
+ * Voice 0 runs a 256-sample square wave from DOC RAM $0000, looping (free
+ * run).  The table holds only $FF/$01 so it never hits the DOC's halt-on-zero
+ * sample.  Pitch = doc_rate * freq / 2^17 (res 0, 256-sample table),
+ * doc_rate = 7159090/8/3, so freq=440 gives ~1 kHz.
+ */
+static void doc_wr(volatile unsigned char __far *adrl,
+                   volatile unsigned char __far *dat,
+                   unsigned char reg, unsigned char val)
+{
+    *adrl = reg;                /* register number (lo address byte) */
+    *dat = val;                 /* data */
+}
+
+void console_beep(void)
+{
+    volatile unsigned char __far *ctl =
+        (volatile unsigned char __far *)0x00E0C03CUL;
+    volatile unsigned char __far *dat =
+        (volatile unsigned char __far *)0x00E0C03DUL;
+    volatile unsigned char __far *adrl =
+        (volatile unsigned char __far *)0x00E0C03EUL;
+    volatile unsigned char __far *adrh =
+        (volatile unsigned char __far *)0x00E0C03FUL;
+    unsigned short i;
+    volatile unsigned int d;
+
+    *ctl = 0x0F;                /* register mode, system volume 15 */
+    doc_wr(adrl, dat, 0xA0, 0x01);   /* halt voice 0 while we program it */
+    doc_wr(adrl, dat, 0xE1, 0x01);   /* exactly 1 oscillator enabled */
+
+    /* Load the square wave into DOC RAM $0000 (auto-increment RAM mode). */
+    *ctl = 0x6F;
+    *adrh = 0x00;
+    *adrl = 0x00;
+    for (i = 0; i < 256; i++)
+        *dat = (i & 0x80) ? 0x01 : 0xFF;
+
+    /* Voice 0 registers: freq lo/hi, volume, wave pointer, table config. */
+    *ctl = 0x0F;
+    doc_wr(adrl, dat, 0x00, 440 & 0xFF);    /* freq lo (~1 kHz) */
+    doc_wr(adrl, dat, 0x01, 440 >> 8);      /* freq hi */
+    doc_wr(adrl, dat, 0x40, 0x7F);          /* volume */
+    doc_wr(adrl, dat, 0x80, 0x00);          /* wave table pointer = $0000 */
+    doc_wr(adrl, dat, 0xC0, 0x00);          /* bank 0, 256-sample, res 0 */
+    doc_wr(adrl, dat, 0xA0, 0x00);          /* key on voice 0 */
+    doc_wr(adrl, dat, 0xE1, 0x01);          /* (re)confirm 1 oscillator */
+
+    for (d = 0; d < 30000; d++) ;           /* ring ~0.2 s */
+
+    doc_wr(adrl, dat, 0xA0, 0x01);          /* halt voice 0 */
+}
+
 void console_putchar(unsigned char c)
 {
     unsigned short off;
 
+    if (c == '\a') {
+        console_beep();
+        return;
+    }
     if (c == '\r') {
         cur_col = 0;
         return;

@@ -14,6 +14,7 @@ void kmain(void)
     console_init();
     console_puts("Minix GS M1: scheduler bring-up\r\n");
     console_puts("tasks: clock, A, B -- round robin @ 6 ticks\r\n");
+    console_beep();             /* test: should sound a ~1 kHz bell */
     timer_init();
     dbg_mark(1);                    /* after timer_init */
 

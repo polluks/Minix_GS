@@ -7,6 +7,7 @@ CFLAGS  := -iigs -const-in-data -unsigned-char -mask-opt -O=0
 AFLAGS  := -816 -Fvobj -vobj3 -quiet -nowarn=62 -opt-branch -ldots
 
 BUILD := build
+DIST  := dist
 LDFLAGS := -b rawbin -T link.ld -e _start -vicelabels $(BUILD)/kernel.lbl
 OBJS  := $(BUILD)/startup.o $(BUILD)/main.o $(BUILD)/console.o $(BUILD)/int.o \
          $(BUILD)/intentry.o $(BUILD)/context.o $(BUILD)/proc.o \
@@ -32,7 +33,15 @@ $(BUILD)/kernel.raw: $(OBJS)
 $(BUILD)/minixgs.po: $(BUILD)/bootblock.bin $(BUILD)/kernel.raw
 	python3 tools/mkdisk.py $^ $@
 
+dist: $(BUILD)/minixgs.po
+	@mkdir -p $(DIST)
+	cp $(BUILD)/minixgs.po $(DIST)/minixgs.po
+	@echo "dist: $(DIST)/minixgs.po"
+
 clean:
 	rm -rf $(BUILD)/*.s $(BUILD)/*.o $(BUILD)/*.bin $(BUILD)/*.raw $(BUILD)/*.po
 
-.PHONY: all clean
+distclean: clean
+	rm -rf $(DIST)
+
+.PHONY: all clean dist distclean
