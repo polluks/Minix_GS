@@ -36,10 +36,13 @@ library target.
 
 ## Status
 
-Work in progress, being brought up bottom-up. The kernel now boots bare-metal
-in the **GSSquared** emulator: 80-column console output works, and the VBL
-interrupt drives a 60 Hz `jiffies` ticker through the native IRQ vector.
-Next up is the microkernel scheduler + IPC.
+Work in progress, being brought up bottom-up. The kernel boots bare-metal in
+the **GSSquared** emulator: the 80-column console works (true mixed case via
+the ALT charset), and the MINIX 1.2 scheduler code is ported with three
+kernel tasks (clock, A, B) wired up for round-robin. The round-robin is
+driven by the VBL interrupt, and that 60 Hz ticker is currently being
+revalidated on the stock (unpatched) emulator via the ROM trampoline path —
+see AGENTS.md.
 
 - [x] vbcc 65816 toolchain built for macOS arm64 (compiler + `dtgen`)
 - [x] 65816 data model generated (`dt.h`: 16-bit `int`, 32-bit `long`, 64-bit `long long`, 16-bit near pointer)
@@ -47,9 +50,9 @@ Next up is the microkernel scheduler + IPC.
 - [x] Toolchain smoke test (rawbin link at $020000, correct 24-bit bank bytes)
 - [x] Boot loader / raw block-0 bootstrap (ProDOS 8 boot block + SmartPort, 800K image)
 - [x] Kernel bring-up: 65816 startup, bank-0 kernel stack, M1 banner in 80-col text
-- [x] Interrupt entry: VBL IRQ + 60 Hz `jiffies` ticker via native vectors in LC RAM
-- [x] Console driver (80-column text mode, aux/main interleave)
-- [ ] Microkernel scheduler + IPC (`proc.c`/`mpx816.s` port)
+- [x] Console driver (80-column text mode, aux/main interleave, true lowercase via ALT charset)
+- [~] Interrupt entry: 60 Hz `jiffies` ticker worked only with the reverted emulator patches; must be revalidated on stock GSSquared via the ROM trampoline path ($C074 / $E1:0010)
+- [~] Microkernel scheduler + IPC: `proc.c` port in place, 3 kernel tasks (clock, A, B) round-robin; runtime debugging via dbg_mark/STALL probes
 - [ ] ADB keyboard driver
 - [ ] SmartPort block device driver (read path works for real ProDOS; our driver still hangs at the IWM sync poll)
 - [ ] `kernel`, `mm`, `fs` processes and IPC
@@ -62,10 +65,14 @@ Next up is the microkernel scheduler + IPC.
   passing; all kernel C is built at `-O=0` (args passed in registers A/X + a
   trailing `pea`), which has been verified empirically for multi-arg and
   pointer-arg calls.
-- **Two GSSquared emulator bugs fixed locally** (kernel change only is needed
-  on real hardware): the emulator ignored the LC RAMRD softswitch when
-  fetching bank-0 vectors, and `$C041` writes never enabled VBL in its
-  interrupt logic. See AGENTS.md.
+- **Lowercase rendering needs the ALT charset.** GSSquared's `CharRom`
+  maps screen codes `$40-$7F` through the Apple-II flash table, garbling
+  lowercase; the kernel enables the ALT charset (`$C00F`) and folds
+  `$40-$5F` to `$00-$1F` so both cases render from the linear glyph table.
+  This is a kernel-side workaround for a stock-emulator quirk (see AGENTS.md).
+- **Boot is non-deterministic (~1 in 3-4 hangs).** The firmware's SmartPort
+  read sometimes spins forever at the IWM sync poll; relaunching the emulator
+  retries the boot. See AGENTS.md.
 
 ## Architecture
 
@@ -126,9 +133,9 @@ bank $04+ processes/tasks (future)
 
 No MMU — a 64 KB bank per process is the memory protection. The hardware
 stack is always in bank 0; per-task kernel stacks live at $A000-$ABFF and
-the kernel stack at $8000-$BFFF (bank 0). Text pages ($0400/$0500), I/O
-($C000-$CFFF) and vectors ($FFE6/$FFEE) are bank-0 only, reached from
-bank-$02 kernel code with `__far` 24-bit pointers.
+the kernel stack at $8000-$BFFF (bank 0). Text pages ($0400/$0500) and I/O
+($C000-$CFFF) are bank-0 only, reached from bank-$02 kernel code with
+`__far` 24-bit pointers.
 
 ### Boot flow
 
@@ -185,8 +192,8 @@ Minix-GS/
     ├── kernel/            # 65816 kernel: startup, console, int, scheduler (WIP)
     │   ├── startup.s      # zpage storage, native-mode entry
     │   ├── main.c         # kmain
-    │   ├── console.c      # 80-col text via far pointers
-    │   ├── int.c/intentry.s   # VBL IRQ, LC-RAM vectors, jiffies
+    │   ├── console.c      # 80-col text via far pointers, ALT-charset glyph map
+    │   ├── int.c/intentry.s   # VBL IRQ entry, timer (revalidation pending)
     │   └── ...
     ├── tools/             # mkdisk.py + gs2* debug probes for GSSquared
     ├── link.ld            # linker script (bank $02)
@@ -205,19 +212,17 @@ make                    # builds bootblock.bin + kernel.raw, packs minixgs.po
 
 `make minixgs.po` produces an 800K disk image: block 0 is the custom ProDOS
 boot block, blocks 1..N the raw kernel. Boot it in **GSSquared** (which maps
-the image into slot 5) and the kernel prints its banner in 80-column text and
-starts ticking `jiffies` at 60 Hz from the VBL interrupt.
+the image into slot 5) and the kernel prints its banner in 80-column text.
 
 On success the machine shows the classic:
 
 ```
-Minix GS M1: 65816 native, bank 0 I/O reachable
-kernel in bank $02, 80-col text via far pointers
+Minix GS M1: scheduler bring-up
+tasks: clock, A, B -- round robin @ 6 ticks
 ```
 
-Note: the two GSSquared fixes (RAMRD-respecting vector fetch, `$C041` VBL
-enable) are local to the working emulator clone — real hardware needs only
-the kernel's LC-RAM vector installation.
+The scheduler's clock tick comes from the VBL interrupt; that path is being
+revalidated on the stock emulator (see AGENTS.md).
 
 ## Credits
 
