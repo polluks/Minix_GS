@@ -78,11 +78,17 @@ void irq_dispatch(void)
 void brk_dispatch(void)
 {
     struct proc *rp = proc_ptr;
-    vu16 __far *fp = (vu16 __far *)(unsigned long)rp->p_sp;
-    int func = fp[0];       /* A: SEND or RECEIVE */
-    int src = fp[1];        /* X: src/dest */
-    int mptr = fp[2];       /* Y: message buffer (near ptr) */
-    int n = 0;
+    vu8 __far *fp = (vu8 __far *)(unsigned long)rp->p_sp;
+    int func, src, mptr, n = 0;
+    unsigned char lo, hi;
+
+    /* Frame (low->high): [DB][D(2)][Y(2)][X(2)][A(2)][P][PC(2)][PB]. */
+    lo = fp[7]; hi = fp[8];
+    func = lo | (hi << 8);          /* A: SEND or RECEIVE */
+    lo = fp[5]; hi = fp[6];
+    src = lo | (hi << 8);           /* X: src/dest */
+    lo = fp[3]; hi = fp[4];
+    mptr = lo | (hi << 8);          /* Y: message buffer (near ptr) */
 
     dbg_mark(50);           /* debug: brk_dispatch entry */
     switch (func) {
@@ -93,7 +99,9 @@ void brk_dispatch(void)
             n = mini_rec(rp->p_pid, src, (message *)mptr);
             break;
     }
-    fp[0] = n;                      /* return value in saved A */
+    lo = (unsigned char)n; hi = (unsigned char)(n >> 8);
+    fp[7] = lo;                     /* return value into saved A */
+    fp[8] = hi;
 }
 
 /*===========================================================================*
