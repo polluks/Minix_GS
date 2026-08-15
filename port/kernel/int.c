@@ -4,15 +4,15 @@
  * delivered through the MegaII interrupt controller:
  *   $C041 INTEN   - bit 3 = VBL enable
  *   $C047 CLRVBLINT - any write clears the VBL interrupt (handler must do it)
- * Language card (bank 0 $C080-$C08F): writing $C080 selects bank 2, enables
- *   RAM reads (so $D000-$FFFF READS come from LC RAM, not ROM) and disables
- *   further LC writes.  This is what makes the native IRQ/BRK vector fetch
- *   at $FFEE/$FFE6 return our trampoline addresses instead of the ROM vector.
- * Native vectors (LC RAM in bank 0): $FFEE IRQ, $FFE6 BRK.
- * The 65816 fetches the vector from bank 0 and runs the handler with PB=0,
- * so the handlers live in bank 2 but are reached via 4-byte "jml" trampolines
- * installed in bank-0 RAM ($0900/$0908).  The VBL event itself is dispatched
- * by irq_dispatch() in proc.c (scheduler) via context.s save/restart.
+ *
+ * Vector installation on stock GSSquared: the native IRQ/BRK vector fetch
+ * (vp_read) returns ROM whenever IOLC shadowing is enabled, so the kernel
+ * inhibits IOLC shadowing via the shadow register ($C035) bit 6 and points
+ * $FFEE/$FFE6 at bank-0 RAM trampolines ($0900/$0908, jml images).  With
+ * shadowing off, $C000-$CFFF in bank 0 reads as plain RAM in the emulator,
+ * so all soft-switch I/O is done through the bank $E0 MegaII window (which
+ * serves the same handlers); text-page writes still shadow to the VGC via
+ * the independent TEXT1 shadow bit.  See AGENTS.md "Interrupt bring-up".
  */
 #include "int.h"
 
@@ -49,6 +49,11 @@ void timer_init(void)
     unsigned char i;
     volatile unsigned char __far *p;
 
+    /* Inhibit I/O+LC shadowing so the native vector fetch reads bank-0 RAM
+     * instead of ROM (stock GSSquared vp_read).  Written via the bank $E0
+     * MegaII window, which reaches the C0xx handler regardless. */
+    *(volatile unsigned char __far *)0x00E0C035UL = 0x40;
+
     p = (volatile unsigned char __far *)0x000900UL;   /* copy JML to bank 0 */
     for (i = 0; i < 4; i++)
         p[i] = ((volatile unsigned char __far *)&tramp_irq)[i];
@@ -59,6 +64,8 @@ void timer_init(void)
 
     *(volatile unsigned short __far *)0x00FFEEUL = 0x0900;   /* native IRQ */
     *(volatile unsigned short __far *)0x00FFE6UL = 0x0908;   /* native BRK */
-    *(volatile unsigned char __far *)0x00C080UL = 0;  /* LC: bank2, RAMRD on */
-    *(volatile unsigned char __far *)0x00C041UL = 0x08; /* INTEN: VBL */
+
+    /* INTEN: enable the VBL source.  Bank $E0 because bank-0 $C0xx is RAM
+     * now that IOLC shadowing is off. */
+    *(volatile unsigned char __far *)0x00E0C041UL = 0x08;
 }

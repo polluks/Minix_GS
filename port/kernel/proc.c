@@ -56,7 +56,7 @@ static int sched_ticks = SCHED_RATE;
  *===========================================================================*/
 void irq_dispatch(void)
 {
-    *(vu8 __far *)0x00C047UL = 0;   /* CLRVBLINT: clear the VBL interrupt */
+    *(vu8 __far *)0x00E0C047UL = 0;  /* CLRVBLINT via MegaII window */
     dbg_mark(40);                   /* debug: irq_dispatch entry */
 
     tick_mess.m_source = HARDWARE;
@@ -277,12 +277,14 @@ void create_task(struct proc *rp, int tasknr, unsigned int entry, int stack_top)
     int i;
 
     /* Build the 13-byte initial frame at stack_top-13 (bank 0):
-     *   [A(2)][X(2)][Y(2)][DP(2)][DB(1)][P(1)][PC(2)][PB(1)]
-     * P=0: M=0 X=0 I=0 (native 16-bit, interrupts enabled on RTI).
+     *   [DB(1)][DP(2)][Y(2)][X(2)][A(2)][P(1)][PC(2)][PB(1)]
+     * Native 65816 IRQ/BRK pushes PB, PC, P (in that order); the interrupt
+     * prolog pushes A/X/Y/DP/DB.  P=0: M=0 X=0 I=0 (native 16-bit,
+     * interrupts enabled on RTI).
      */
-    for (i = 0; i < 8; i++)
-        f[i] = 0;
-    f[8] = 2;                       /* DB = $02 */
+    f[0] = 2;                       /* DB = $02 */
+    for (i = 1; i < 9; i++)
+        f[i] = 0;                   /* D, Y, X, A = 0 */
     f[9] = 0x00;                    /* P */
     f[10] = entry & 0xFF;
     f[11] = (entry >> 8) & 0xFF;

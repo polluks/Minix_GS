@@ -33,10 +33,12 @@ void console_init(void)
      * SETALTCHAR ($C00F): GSSquared's CharRom maps screen codes $40-$7F
      * through the Apple-II flash table, which garbles lowercase (a-z lands on
      * punctuation glyphs). The ALT charset it selects uses the linear code->glyph
-     * table, which contains the true lowercase glyphs. */
-    sw = (volatile unsigned char __far *)0x00C00DUL;
+     * table, which contains the true lowercase glyphs.
+     * Written via the bank $E0 MegaII window: the kernel inhibits IOLC
+     * shadowing (see int.c), so bank-0 $C0xx reads as RAM. */
+    sw = (volatile unsigned char __far *)0x00E0C00DUL;
     *sw = 0;
-    sw = (volatile unsigned char __far *)0x00C00FUL;
+    sw = (volatile unsigned char __far *)0x00E0C00FUL;
     *sw = 0;
 
     for (r = 0; r < 24; r++) {

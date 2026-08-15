@@ -1,11 +1,11 @@
-# Minix GS — Minix on the Apple IIGS
+# Minix GS — Minix on the Apple IIgs
 
 Port of [Minix 1.2](https://en.wikipedia.org/wiki/MINIX) (the classic 8088
-microkernel UNIX) to the **Apple IIGS** (65816, 2.8 MHz, up to 8 MB RAM),
+microkernel UNIX) to the **Apple IIgs** (65816, 2.8 MHz, up to 8 MB RAM),
 using the **vbcc 65816** cross-compiler toolchain.
 
 This is a real, bare-metal port: Minix replaces GS/OS and owns the machine
-— no Toolbox, no ProDOS runtime. The IIGS is booted into 65816 native mode
+— no Toolbox, no ProDOS runtime. The IIgs is booted into 65816 native mode
 and Minix's kernel/MM/FS run as message-passing processes, exactly as on the
 PC it was written for.
 
@@ -18,10 +18,10 @@ The mapping has been discussed since the machine shipped
 ([comp.os.minix, 1989](https://groups.google.com/g/comp.os.minix/c/fRikj9II0e4),
 [6502.org, 2021](https://6502.org/forum/viewtopic.php?t=6536)) but never
 completed, partly because no capable 65816 C toolchain existed. That changed
-when Volker Barthelmann released **vbcc for 65816** (2025) with an Apple IIGS
+when Volker Barthelmann released **vbcc for 65816** (2025) with an Apple IIgs
 library target.
 
-| Minix 1.2 (PC)         | Apple IIGS                  |
+| Minix 1.2 (PC)         | Apple IIgs                  |
 |------------------------|-----------------------------|
 | 8088 @ 4.77 MHz        | 65816 @ 2.8 MHz             |
 | 20-bit address space   | 24-bit address space (banks)|
@@ -51,8 +51,8 @@ see AGENTS.md.
 - [x] Boot loader / raw block-0 bootstrap (ProDOS 8 boot block + SmartPort, 800K image)
 - [x] Kernel bring-up: 65816 startup, bank-0 kernel stack, M1 banner in 80-col text
 - [x] Console driver (80-column text mode, aux/main interleave, true lowercase via ALT charset)
-- [~] Interrupt entry: 60 Hz `jiffies` ticker worked only with the reverted emulator patches; must be revalidated on stock GSSquared via the ROM trampoline path ($C074 / $E1:0010)
-- [~] Microkernel scheduler + IPC: `proc.c` port in place, 3 kernel tasks (clock, A, B) round-robin; runtime debugging via dbg_mark/STALL probes
+- [ ] Interrupt entry: 60 Hz `jiffies` ticker worked only with the reverted emulator patches; must be revalidated on stock GSSquared via the ROM trampoline path ($C074 / $E1:0010)
+- [ ] Microkernel scheduler + IPC: `proc.c` port in place, 3 kernel tasks (clock, A, B) round-robin; runtime debugging via dbg_mark/STALL probes
 - [ ] ADB keyboard driver
 - [ ] SmartPort block device driver (read path works for real ProDOS; our driver still hangs at the IWM sync poll)
 - [ ] `kernel`, `mm`, `fs` processes and IPC
@@ -88,7 +88,7 @@ a tiny kernel message mechanism:
 +--------------------------------------------------------------+
 |  KERNEL (microkernel: clock, tty, floppy, syscall + msg code) |
 +--------------------------------------------------------------+
-|  IIGS hardware (VGC, VIA, ADB, SmartPort, Ensoniq)           |
+|  IIgs hardware (VGC, VIA, ADB, SmartPort, Ensoniq)           |
 +--------------------------------------------------------------+
 ```
 
@@ -151,7 +151,7 @@ This project builds everything from source on macOS (arm64):
 
 - **vbcc** (compiler, incl. `machines/65816` backend): `www.compilers.de/vbcc.html`
 - **vasm** (assembler, `cpu=65816`): 65816 support
-- **vlink** (linker): Apple IIGS OMF output support
+- **vlink** (linker): Apple IIgs OMF output support
 
 `dtgen` is interactive; the project pins the answers needed for the 65816
 data model (see `tools/`).
@@ -186,7 +186,7 @@ Minix-GS/
 │       ├── fs/            # file system
 │       ├── lib/           # C library
 │       └── commands/      # userland (init, sh, ls, ...)
-└── port/                  # IIGS port
+└── port/                  # IIgs port
     ├── boot/
     │   └── bootblock.s    # ProDOS 8 boot block (assembles for org $0800)
     ├── kernel/            # 65816 kernel: startup, console, int, scheduler (WIP)

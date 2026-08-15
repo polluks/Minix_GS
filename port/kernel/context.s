@@ -2,11 +2,12 @@
 ; BRK syscall wrapper.
 ;
 ; Frame layout on the process's own (bank-0) hardware stack, low->high:
-;   [A(2)][X(2)][Y(2)][DP(2)][DB(1)][P(1)][PC(2)][PB(1)]   = 13 bytes
-; The CPU pushes PB/PC/P (BRK and IRQ both; GSSquared pops 1-byte P), then
-; the prolog pushes A/X/Y/DP/DB.  save() stores SP (= frame base) in
-; proc_ptr->p_sp (offset 0), switches to the bank-0 kernel stack, and calls
-; the C dispatcher; restart() undoes it and RTI's into the chosen process.
+;   [DB(1)][DP(2)][Y(2)][X(2)][A(2)][P(1)][PC(2)][PB(1)]   = 13 bytes
+; The CPU pushes PB, then PC, then P (native 65816 order -- verified in
+; GSSquared's brk_cop/IRQ and on real hardware), then the prolog pushes
+; A/X/Y/DP/DB.  save() stores SP (= frame base) in proc_ptr->p_sp
+; (offset 0), switches to the bank-0 kernel stack, and calls the C
+; dispatcher; restart() undoes it and RTI's into the chosen process.
 ;
 ; All dispatchers run with I=1 between save and restart, so pick_proc() is
 ; only ever reached in trap/interrupt context (see AGENTS.md).
@@ -19,7 +20,7 @@
 K_STACK_TOP = $7FFE
 
 ;=============================================================================
-; _int_irq: entered via the bank-0 trampoline (jml from vector $FFEE).
+; _int_irq: entered via the interrupt trampoline (jml >_int_irq).
 ;=============================================================================
     global _int_irq
 _int_irq:
@@ -43,7 +44,7 @@ _int_irq:
     jmp >_restart
 
 ;=============================================================================
-; _int_brk: native BRK (vector $FFE6 trampoline).  BRK does NOT set I.
+; _int_brk: native BRK entry (via trampoline).  BRK does NOT set I.
 ;=============================================================================
     global _int_brk
 _int_brk:
@@ -86,7 +87,8 @@ _restart:
     ldy _dbg_restart_sp     ; Y = frame base (bank 0, under $8000)
     ldx #0                  ; capture the 13-byte frame to bank-0 $0E00
     phb
-    lda #0
+    sep #$20                ; push a single 0 byte so the pop below
+    lda #0                  ; pairs with the phb 1-for-1
     pha
     plb                     ; DB = 0 so near-abs,Y reads bank 0
 cap_loop:
@@ -96,11 +98,13 @@ cap_loop:
     inx
     cpx #13
     bne cap_loop
-    plb                     ; DB = 2 again
+    plb                     ; DB = 2 again (pops the phb byte)
+    rep #$20
     lda #$AA
     sta >$000E20
 cap_done:
-    tcs                     ; switch to the process's own stack
+    lda _dbg_restart_sp     ; process's own stack pointer
+    tcs                     ; switch to it
     lda #11                 ; debug mark: after tcs
     jsl >_dbg_mark
     plb                     ; undo prolog: phb phd phy phx pha

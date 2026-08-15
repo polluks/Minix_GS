@@ -64,11 +64,12 @@ The vbcc65816 *r2 distro* ships Linux/Win binaries only (cannot run on arm64 mac
 - [x] Boot/SmartPort conventions verified (slot 5, $C50D, cmd $01/$41, unit $01)
 - [x] 80-col text layout confirmed (row map + aux/main interleave)
 - [x] Project skeleton under `port/` (boot/bootblock.s, tools/mkdisk.py, tools/gs2* debug harness, README credits)
-- [~] Boot block + 800K disk image builder — reads work for sys6 (C50A, ~8 s/read) but our C50A call hangs at the IWM sync poll; block-1-vs-2 hypothesis untested
-- [x] IIgs bare-metal bring-up: console works — **M1 banner displays in GSSquared 80-col mode** (kernel at $020100 → kmain → console_init/puts/putchar; blank screen was the `-O=2` arg bug, fixed by `-O=0`)
+- [ ] Boot block + 800K disk image builder — reads work for sys6 (C50A, ~8 s/read) but our C50A call hangs at the IWM sync poll; block-1-vs-2 hypothesis untested
+- [x] IIgs bare-metal bring-up: console works — **M1 banner displays in GSSquared 80-col mode** (kernel at $020100 → kmain → console_init/puts/putchar; blank screen was the `-O=2` arg bug, fixed by `-O=0`). Mixed case renders via the ALT charset: kernel writes SETALTCHAR ($C00F) + folds screen codes $40-$5F to $00-$1F so GSSquared's CharRom linear table reaches the true lowercase glyphs (see the "Lowercase rendering" note).
+- [ ] Microkernel scheduler bring-up (Minix proc.c port committed): 3 kernel tasks (clock, A, B) wired for round-robin @ 6 ticks; runtime debugging via dbg_mark/STALL probes (dbg_last=2 = post-ready/pick_proc). Round-robin is driven by the VBL ticker, so it waits on the interrupt revalidation below.
+- [ ] `___mulint16` debug: 11*28 gives 560 (0x230) instead of 308 (0x134); acc slot bank0 $7FEC reads 0xFC at first add despite `lda #0; pha`. Next: inspect `stack_push` (base_6502.cpp:3262) and dump bank0 $7FEC-$7FF2 at park.
 - [ ] VIA2 timer, ADB
 - [ ] Interrupt entry: 60 Hz jiffies ticker worked only with the REVERTED emulator patches; must be revalidated on stock GSSquared via the ROM trampoline path ($C074 / $E1:0010)
-- [ ] Microkernel scheduler + IPC (Minix proc.c/mpx88.s port)
 - [ ] MM, FS (SmartPort block driver), userland
 
 ## Key References

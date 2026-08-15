@@ -37,18 +37,6 @@ void kmain(void)
         dbg_st_a = m;                /* what the caller received back */
     }
     while (dbg_go == 0) { }         /* STALL 1: probe reads the frame here */
-    {   /* debug: dump proc[].p_sp/p_flags/p_pid (6 bytes each) to bank0 $0E00 */
-        volatile unsigned char __far *d = (volatile unsigned char __far *)0x0000E00UL;
-        int i;
-        for (i = 0; i < 12; i++) {
-            d[i * 6 + 0] = (unsigned char)(proc[i].p_sp & 0xFF);
-            d[i * 6 + 1] = (unsigned char)(proc[i].p_sp >> 8);
-            d[i * 6 + 2] = (unsigned char)(proc[i].p_flags & 0xFF);
-            d[i * 6 + 3] = (unsigned char)(proc[i].p_flags >> 8);
-            d[i * 6 + 4] = (unsigned char)(proc[i].p_pid & 0xFF);
-            d[i * 6 + 5] = (unsigned char)(proc[i].p_pid >> 8);
-        }
-    }
     dbg_mark(3);
     create_task(proc_addr(TASK_A), TASK_A, (unsigned int)&task_a, TASK_A_TOP);
     dbg_mark(4);
