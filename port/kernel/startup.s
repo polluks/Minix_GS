@@ -1,9 +1,10 @@
 ; Minix GS kernel startup (bare-metal, bank $02).
 ;
 ; Entry contract (see AGENTS.md): native mode, SEI, DB=$02, M/X=16,
-; DP=$0000, SP=$BFFE (bank-0 stack $8000-$BFFF). Reached via JML >$020100
-; from the boot block. zpage storage (r0-r31 + btmp0-3) lives at $020000,
-; right at the bank base, so DP-relative addressing hits $0000-$00FF.
+; DP=$0000, SP=$7FFE (bank-0 stack under $8000 -- see proc.h). Reached via
+; JML >$020100 from the boot block. zpage storage (r0-r31 + btmp0-3) lives
+; at $020000, right at the bank base, so DP-relative addressing hits
+; $0000-$00FF.
 
     section zpage,"adrwz"
     global r0
@@ -86,8 +87,8 @@ _start:
     rep #$30            ; M/X = 16
     a16
     x16
-    ldx #$BFFE
-    txs                 ; kernel hardware stack in bank 0 ($8000-$BFFF)
+    ldx #$7FFE
+    txs                 ; kernel hardware stack in bank 0 (under $8000)
     lda #$0000
     tcd                 ; DP = $0000 (already 0, be explicit)
     jsl >_kmain         ; never returns

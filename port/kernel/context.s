@@ -15,6 +15,9 @@
     a16
     x16
 
+; Kernel stack top (bank 0).  Must stay under $8000 (see proc.h comment).
+K_STACK_TOP = $7FFE
+
 ;=============================================================================
 ; _int_irq: entered via the bank-0 trampoline (jml from vector $FFEE).
 ;=============================================================================
@@ -29,9 +32,13 @@ _int_irq:
     phb
     ldx _proc_ptr
     tsc
-    sta 0,x                 ; proc_ptr->p_sp = SP (points at saved A)
-    ldx #$BFFE              ; kernel stack (bank 0)
+    sta !0,x                ; proc_ptr->p_sp = SP (points at saved A)
+    sta _dbg_irq_sp         ; debug: the SP just saved
+    stx _dbg_proc_ptr
+    ldx #K_STACK_TOP        ; kernel stack (bank 0, under $8000)
     txs
+    lda #20                 ; debug mark: _int_irq entry
+    jsl >_dbg_mark
     jsl >_irq_dispatch
     jmp >_restart
 
@@ -49,9 +56,13 @@ _int_brk:
     phb
     ldx _proc_ptr
     tsc
-    sta 0,x
-    ldx #$BFFE
+    sta !0,x
+    sta _dbg_brk_sp         ; debug: the SP just saved
+    stx _dbg_proc_ptr
+    ldx #K_STACK_TOP
     txs
+    lda #30                 ; debug mark: _int_brk entry
+    jsl >_dbg_mark
     jsl >_brk_dispatch
     jmp >_restart
 
@@ -60,17 +71,43 @@ _int_brk:
 ;=============================================================================
     global _restart
 _restart:
+    lda #10                 ; debug mark: restart entry
+    jsl >_dbg_mark
     lda _cur_proc
     cmp #$FC19              ; IDLE = -999
     beq _idle
     ldx _proc_ptr
-    lda 0,x                 ; p_sp
+    stx _dbg_proc_ptr
+    lda !0,x                ; p_sp
+    sta _dbg_restart_sp
+    lda >$000E20            ; capture only the FIRST time
+    cmp #$AA
+    beq cap_done
+    ldy _dbg_restart_sp     ; Y = frame base (bank 0, under $8000)
+    ldx #0                  ; capture the 13-byte frame to bank-0 $0E00
+    phb
+    lda #0
+    pha
+    plb                     ; DB = 0 so near-abs,Y reads bank 0
+cap_loop:
+    lda $0000,y
+    sta >$000E00,x
+    iny
+    inx
+    cpx #13
+    bne cap_loop
+    plb                     ; DB = 2 again
+    lda #$AA
+    sta >$000E20
+cap_done:
     tcs                     ; switch to the process's own stack
-    pla
-    plx
-    ply
+    lda #11                 ; debug mark: after tcs
+    jsl >_dbg_mark
+    plb                     ; undo prolog: phb phd phy phx pha
     pld
-    plb
+    ply
+    plx
+    pla
     rti                     ; pops P(1), PC(2), PB(1)
 
 _idle:

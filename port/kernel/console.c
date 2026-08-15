@@ -25,6 +25,19 @@ static volatile unsigned char __far *const aux_text =
 void console_init(void)
 {
     unsigned char r, c;
+    volatile unsigned char __far *sw;
+
+    /* SET80COL soft switch ($C00D): select the 80-column text mode so the
+     * VGC/scanner interleaves the aux+main text buffers we write below.
+     * The ROM leaves the display in 40-col mode for a raw boot.
+     * SETALTCHAR ($C00F): GSSquared's CharRom maps screen codes $40-$7F
+     * through the Apple-II flash table, which garbles lowercase (a-z lands on
+     * punctuation glyphs). The ALT charset it selects uses the linear code->glyph
+     * table, which contains the true lowercase glyphs. */
+    sw = (volatile unsigned char __far *)0x00C00DUL;
+    *sw = 0;
+    sw = (volatile unsigned char __far *)0x00C00FUL;
+    *sw = 0;
 
     for (r = 0; r < 24; r++) {
         for (c = 0; c < 40; c++) {
@@ -50,6 +63,11 @@ void console_putchar(unsigned char c)
             cur_row++;
         return;
     }
+    /* Under the ALT charset the linear table renders codes $00-$1F as
+     * @A-Z[\]^_ (same glyphs the flash table uses for $40-$5F), so fold
+     * the $40-$5F range down to $00-$1F. Everything else maps linearly. */
+    if (c >= 0x40 && c < 0x60)
+        c -= 0x40;
     if (cur_col >= 80) {
         cur_col = 0;
         if (cur_row < 23)

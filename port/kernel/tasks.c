@@ -5,11 +5,13 @@
  */
 #include "proc.h"
 #include "console.h"
+#include "int.h"
 
 volatile int task_a_count, task_b_count;
 
 void task_a(void)
 {
+    dbg_mark(61);           /* debug: task_a entry */
     for (;;) {
         task_a_count++;
         if ((task_a_count & 0x3FFF) == 0)
@@ -19,6 +21,7 @@ void task_a(void)
 
 void task_b(void)
 {
+    dbg_mark(62);           /* debug: task_b entry */
     for (;;) {
         task_b_count++;
         if ((task_b_count & 0x3FFF) == 0)

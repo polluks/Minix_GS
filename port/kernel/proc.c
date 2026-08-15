@@ -13,6 +13,7 @@
  */
 #include "proc.h"
 #include "console.h"
+#include "int.h"
 
 typedef volatile unsigned char vu8;
 typedef volatile unsigned short vu16;
@@ -56,6 +57,7 @@ static int sched_ticks = SCHED_RATE;
 void irq_dispatch(void)
 {
     *(vu8 __far *)0x00C047UL = 0;   /* CLRVBLINT: clear the VBL interrupt */
+    dbg_mark(40);                   /* debug: irq_dispatch entry */
 
     tick_mess.m_source = HARDWARE;
     tick_mess.m_type = 2;           /* CLOCK_TICK */
@@ -82,6 +84,7 @@ void brk_dispatch(void)
     int mptr = fp[2];       /* Y: message buffer (near ptr) */
     int n = 0;
 
+    dbg_mark(50);           /* debug: brk_dispatch entry */
     switch (func) {
         case SEND:
             n = mini_send(rp->p_pid, src, (message *)mptr);

@@ -18,6 +18,28 @@
 
 volatile unsigned short jiffies;    /* 60 Hz clock ticks */
 
+/* Debug markers written by dbg_mark() (see int.h). */
+volatile unsigned char dbg_last;
+volatile unsigned short dbg_count;
+volatile unsigned short dbg_irq_sp;
+volatile unsigned short dbg_brk_sp;
+volatile unsigned short dbg_restart_sp;
+volatile unsigned short dbg_proc_ptr;
+volatile unsigned short dbg_go;
+volatile unsigned short dbg_mul_r0;    /* ___mulint16 args/result (written by runtime.s) */
+volatile unsigned short dbg_mul_r1;
+volatile unsigned short dbg_mul_a;
+volatile unsigned short dbg_st_r0;     /* self-test locals (written by kmain) */
+volatile unsigned short dbg_st_a;
+volatile unsigned short dbg_st_mark;   /* 0x1111 once self-test has run */
+
+void dbg_mark(unsigned char n)
+{
+    dbg_last = n;
+    dbg_count++;
+    *(volatile unsigned char __far *)0x000F00UL = n;   /* bank-0 mirror */
+}
+
 /* JML images (4 bytes each) for the bank-2 handlers, defined in intentry.s. */
 extern unsigned char tramp_irq[4];
 extern unsigned char tramp_brk[4];

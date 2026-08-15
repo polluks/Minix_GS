@@ -76,11 +76,18 @@ struct proc {
 #define NIL_PROC ((struct proc *)0)
 #define NIL_MESS ((message *)0)
 
-/* Bank-0 task stack regions (hardware stack must be bank 0). */
-#define TASK_A_TOP   0xA3FE
-#define TASK_B_TOP   0xA7FE
-#define CLOCK_TOP    0xABFE
-#define K_STACK_TOP  0xBFFE
+/* Bank-0 stack regions (hardware stack must be bank 0).
+ *
+ * All stack tops are BELOW $8000.  vbcc 65816 sign-extends near pointers
+ * with bit 15 set to bank $FF (its 65816 model treats $8000+ near as the
+ * "negative"/ROM half of the bank), so a frame at $ABF1 becomes $FFABF1
+ * under `sta [r0]` and GSSquared drops the write (bank $FF is LC/ROM).
+ * Keeping every bank-0 stack under $8000 keeps the bank byte 0.
+ */
+#define TASK_A_TOP   0x67FE
+#define TASK_B_TOP   0x6BFE
+#define CLOCK_TOP    0x6FFE
+#define K_STACK_TOP  0x7FFE
 
 /* Globals referenced by context.s (non-static). */
 extern struct proc proc[NR_TASKS + NR_PROCS];

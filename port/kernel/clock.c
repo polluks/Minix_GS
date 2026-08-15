@@ -5,6 +5,7 @@
  * message consumer.
  */
 #include "proc.h"
+#include "int.h"
 
 /* Syscall argument globals filled by recv() and consumed by asm_recv(). */
 extern volatile int sys_src, sys_mptr;
@@ -24,6 +25,7 @@ int recv(int src, int mptr)
 
 void clock_task(void)
 {
+    dbg_mark(60);           /* debug: clock_task entry */
     for (;;) {
         recv(ANY, (int)&mc);            /* blocks until a tick arrives */
         if (mc.m_source == HARDWARE && mc.m_type == 2)  /* CLOCK_TICK */
