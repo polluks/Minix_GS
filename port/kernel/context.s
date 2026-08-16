@@ -30,7 +30,14 @@ _int_irq:
     phx
     phy
     phd
-    phb
+    phb                     ; save original DB on kernel stack
+    sep #$20                ; set DB=2 for kernel data access (near ptrs)
+    a8
+    lda #$02
+    pha
+    plb
+    a16
+    rep #$20
     ldx _proc_ptr
     tsc
     sta !0,x                ; proc_ptr->p_sp = SP (points at saved A)
@@ -54,7 +61,14 @@ _int_brk:
     phx
     phy
     phd
-    phb
+    phb                     ; save original DB on kernel stack
+    sep #$20                ; set DB=2 for kernel data access (near ptrs)
+    a8
+    lda #$02
+    pha
+    plb
+    a16
+    rep #$20
     ldx _proc_ptr
     tsc
     sta !0,x
@@ -72,6 +86,14 @@ _int_brk:
 ;=============================================================================
     global _restart
 _restart:
+    phb                     ; save caller's DB
+    sep #$20                ; set DB=2 for kernel data access (near ptrs)
+    a8
+    lda #$02
+    pha
+    plb
+    a16
+    rep #$20
     lda #10                 ; debug mark: restart entry
     jsl >_dbg_mark
     lda _cur_proc
@@ -88,6 +110,7 @@ _restart:
     ldx #0                  ; capture the 13-byte frame to bank-0 $0E00
     phb
     sep #$20                ; push a single 0 byte so the pop below
+    a8                      ; vasm: A is now 8-bit (sep is NOT width-tracked)
     lda #0                  ; pairs with the phb 1-for-1
     pha
     plb                     ; DB = 0 so near-abs,Y reads bank 0
@@ -99,6 +122,7 @@ cap_loop:
     cpx #13
     bne cap_loop
     plb                     ; DB = 2 again (pops the phb byte)
+    a16
     rep #$20
     lda #$AA
     sta >$000E20
