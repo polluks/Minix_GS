@@ -46,24 +46,18 @@ extern unsigned char tramp_brk[4];
 
 void timer_init(void)
 {
-    unsigned char i;
-    volatile unsigned char __far *p;
-
     /* Inhibit I/O+LC shadowing so the native vector fetch reads bank-0 RAM
      * instead of ROM (stock GSSquared vp_read).  Written via the bank $E0
      * MegaII window, which reaches the C0xx handler regardless. */
     *(volatile unsigned char __far *)0x00E0C035UL = 0x40;
 
-    p = (volatile unsigned char __far *)0x000900UL;   /* copy JML to bank 0 */
-    for (i = 0; i < 4; i++)
-        p[i] = ((volatile unsigned char __far *)&tramp_irq)[i];
-
-    p = (volatile unsigned char __far *)0x000908UL;
-    for (i = 0; i < 4; i++)
-        p[i] = ((volatile unsigned char __far *)&tramp_brk)[i];
-
-    *(volatile unsigned short __far *)0x00FFEEUL = 0x0900;   /* native IRQ */
-    *(volatile unsigned short __far *)0x00FFE6UL = 0x0908;   /* native BRK */
+    /* The CPU keeps PBR when vector-fetching: IRQ at $00:FFEE yields a
+     * 16-bit offset, the CPU jumps to (PBR):offset.  With PBR=$02 all
+     * kernel code lives in bank $02, so the JML trampolines (already
+     * linked into the kernel binary) are reached directly -- no bank-0
+     * copy needed. */
+    *(volatile unsigned short __far *)0x00FFEEUL = (unsigned short)&tramp_irq;
+    *(volatile unsigned short __far *)0x00FFE6UL = (unsigned short)&tramp_brk;
 
     /* INTEN: enable the VBL source.  Bank $E0 because bank-0 $C0xx is RAM
      * now that IOLC shadowing is off. */

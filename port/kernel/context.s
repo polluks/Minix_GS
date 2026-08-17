@@ -40,7 +40,7 @@ _int_irq:
     rep #$20
     ldx _proc_ptr
     tsc
-    sta !0,x                ; proc_ptr->p_sp = SP (points at saved A)
+    sta !0,x                ; proc_ptr->p_sp = SP (points at saved DB, frame base)
     sta _dbg_irq_sp         ; debug: the SP just saved
     stx _dbg_proc_ptr
     ldx #K_STACK_TOP        ; kernel stack (bank 0, under $8000)
